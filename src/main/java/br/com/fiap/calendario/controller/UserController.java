@@ -1,12 +1,16 @@
 package br.com.fiap.calendario.controller;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,10 +21,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.com.fiap.calendario.model.User;
+import jakarta.validation.Valid;
 
+@CrossOrigin(origins = "http://localhost:3000") 
 @RestController
-@RequestMapping("/api/login")
-public class LoginController {
+@RequestMapping("/api/users")
+public class UserController {
 
     private List<User> users = new ArrayList<>();
     private AtomicLong counter = new AtomicLong(); 
@@ -31,8 +37,16 @@ public class LoginController {
     }
 
     @PostMapping
-    public ResponseEntity<User> create(@RequestBody User user) {
-        // Gera um id e adiciona o usuário na lista
+    public ResponseEntity<?> create(@Valid @RequestBody User user, BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+           
+            Map<String, String> errors = new HashMap<>();
+            bindingResult.getFieldErrors().forEach(error -> 
+                errors.put(error.getField(), error.getDefaultMessage())
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+        }
+
         user.setId(counter.incrementAndGet());
         users.add(user);
         return ResponseEntity.status(HttpStatus.CREATED).body(user);
@@ -43,11 +57,8 @@ public class LoginController {
         Optional<User> found = users.stream()
                 .filter(u -> u.getId().equals(id))
                 .findFirst();
-        if (found.isPresent()) {
-            return ResponseEntity.ok(found.get());
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        return found.map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
 
     @PutMapping("/{id}")
@@ -66,7 +77,7 @@ public class LoginController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
-    
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> destroy(@PathVariable Long id) {
         boolean removed = users.removeIf(u -> u.getId().equals(id));
