@@ -1,90 +1,117 @@
 package br.com.fiap.calendario.controller;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import br.com.fiap.calendario.model.User;
+import br.com.fiap.calendario.repository.UserRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
-@CrossOrigin(origins = "http://localhost:3000") 
 @RestController
 @RequestMapping("/api/users")
+@CacheConfig(cacheNames = "users")
+@Tag(name = "Usuários", description = "Operações relacionadas ao gerenciamento de usuários")
 public class UserController {
 
-    private List<User> users = new ArrayList<>();
-    private AtomicLong counter = new AtomicLong(); 
+    @Autowired
+    private UserRepository repository;
 
     @GetMapping
-    public ResponseEntity<List<User>> index() {
-        return ResponseEntity.ok(users);
+    @Cacheable
+    @Operation(summary = "Listar todos os usuários",
+               description = "Retorna a lista de usuários cadastrados",
+               responses = {
+                   @ApiResponse(responseCode = "200", description = "Lista de usuários retornada com sucesso")
+               })
+    public List<User> index() {
+        return repository.findAll();
     }
 
     @PostMapping
-    public ResponseEntity<?> create(@Valid @RequestBody User user, BindingResult bindingResult) {
-        if (bindingResult.hasErrors()) {
-           
-            Map<String, String> errors = new HashMap<>();
-            bindingResult.getFieldErrors().forEach(error -> 
-                errors.put(error.getField(), error.getDefaultMessage())
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
-        }
-
-        user.setId(counter.incrementAndGet());
-        users.add(user);
-        return ResponseEntity.status(HttpStatus.CREATED).body(user);
+    @CacheEvict(allEntries = true)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Cadastrar um novo usuário",
+               description = "Cria um novo usuário e salva no banco de dados",
+               requestBody = @RequestBody(
+                   description = "Dados do novo usuário",
+                   required = true,
+                   content = @Content(schema = @Schema(implementation = User.class))
+               ),
+               responses = {
+                   @ApiResponse(responseCode = "201", description = "Usuário criado com sucesso"),
+                   @ApiResponse(responseCode = "400", description = "Dados inválidos")
+               })
+    public User create(@Valid @org.springframework.web.bind.annotation.RequestBody User user) {
+        return repository.save(user);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<User> show(@PathVariable Long id) {
-        Optional<User> found = users.stream()
-                .filter(u -> u.getId().equals(id))
-                .findFirst();
-        return found.map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+    @Operation(summary = "Buscar usuário por ID",
+               description = "Retorna os dados de um usuário pelo seu ID",
+               responses = {
+                   @ApiResponse(responseCode = "200", description = "Usuário encontrado"),
+                   @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
+               })
+    public User show(@PathVariable Long id) {
+        Optional<User> found = repository.findById(id);
+        return found.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário " + id + " não encontrado"));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<User> update(@PathVariable Long id, @RequestBody User updatedUser) {
-        Optional<User> found = users.stream()
-                .filter(u -> u.getId().equals(id))
-                .findFirst();
-
-        if (found.isPresent()) {
-            User user = found.get();
-            user.setNome(updatedUser.getNome());
-            user.setEmail(updatedUser.getEmail());
-            user.setSenha(updatedUser.getSenha());
-            return ResponseEntity.ok(user);
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+    @CacheEvict(allEntries = true)
+    @Operation(summary = "Atualizar usuário",
+               description = "Atualiza os dados de um usuário existente",
+               requestBody = @RequestBody(
+                   description = "Dados atualizados do usuário",
+                   required = true,
+                   content = @Content(schema = @Schema(implementation = User.class))
+               ),
+               responses = {
+                   @ApiResponse(responseCode = "200", description = "Usuário atualizado com sucesso"),
+                   @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
+               })
+    public User update(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestBody User updatedUser) {
+        User user = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário " + id + " não encontrado"));
+        user.setNome(updatedUser.getNome());
+        user.setEmail(updatedUser.getEmail());
+        user.setSenha(updatedUser.getSenha());
+        return repository.save(user);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> destroy(@PathVariable Long id) {
-        boolean removed = users.removeIf(u -> u.getId().equals(id));
-        if (removed) {
-            return ResponseEntity.noContent().build();
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+    @CacheEvict(allEntries = true)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Deletar usuário",
+               description = "Remove um usuário do banco de dados pelo ID",
+               responses = {
+                   @ApiResponse(responseCode = "204", description = "Usuário deletado com sucesso"),
+                   @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
+               })
+    public void destroy(@PathVariable Long id) {
+        User user = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário " + id + " não encontrado"));
+        repository.delete(user);
     }
 }

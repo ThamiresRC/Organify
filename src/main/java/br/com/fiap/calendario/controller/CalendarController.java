@@ -1,56 +1,73 @@
 package br.com.fiap.calendario.controller;
 
-import java.util.ArrayList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.com.fiap.calendario.model.Calendar;
-
+import br.com.fiap.calendario.repository.CalendarRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 @RestController
 @RequestMapping("/calendar")
+@Cacheable("calendars")
 public class CalendarController {
 
-    private Logger log = LoggerFactory.getLogger(getClass());
- 
-    private List<Calendar> repository = new ArrayList<>();
-    
+    @Autowired
+    private CalendarRepository repository;
+
     @GetMapping
+    @Cacheable
+    @Operation(summary = "Listar todos os eventos", description = "Retorna a lista de todos os eventos cadastrados no calendário", tags = "Calendar")
     public List<Calendar> index(){
-        return repository;
+        return repository.findAll();
     }
     
     @PostMapping
-    public ResponseEntity<Calendar> create(@RequestBody Calendar calendar){
-        repository.add(calendar);
-        log.info("Cadastrando evento: " + calendar.getName());
-        return ResponseEntity.status(201).body(calendar);
+    @CacheEvict(value = "calendars", allEntries = true)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Criar um novo evento", responses = @ApiResponse(responseCode = "400", description = "Dados inválidos"))
+    public Calendar create(@RequestBody Calendar calendar){
+        return repository.save(calendar);
     }
 
     @GetMapping("{id}")
     public Calendar get(@PathVariable Long id){
-        log.info("Buscando evento " + id);
-        return getCalendar(id);
+        return repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Evento " + id + " não encontrado"));
     }
-
     
-    private Calendar getCalendar(long id) {
-        return repository.stream()
-        .filter(c -> c.getId().equals(id))
-        .findFirst()
-        .orElseThrow(
-            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Evento " + id + " não encontrado" )
-        );
+    @DeleteMapping("{id}")
+    @CacheEvict(value = "calendars", allEntries = true)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void destroy(@PathVariable Long id){
+        Calendar event = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Evento " + id + " não encontrado"));
+        repository.delete(event);
+    }
+    
+    @PutMapping("{id}")
+    @CacheEvict(value = "calendars", allEntries = true)
+    public Calendar update(@PathVariable Long id, @RequestBody Calendar updatedCalendar){
+        Calendar event = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Evento " + id + " não encontrado"));
+       
+        event.setName(updatedCalendar.getName());
+        event.setType(updatedCalendar.getType());
+        return repository.save(event);
     }
 }
