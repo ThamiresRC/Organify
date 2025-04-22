@@ -50,10 +50,10 @@
 
         <!-- Lombok -->
         <dependency>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-              <scope>provided</scope>
-          </dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
         <!-- Swagger OpenAPI (documentação da API) -->
         <dependency>

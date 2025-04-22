@@ -7,6 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -113,5 +118,34 @@ public class UserController {
         User user = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário " + id + " não encontrado"));
         repository.delete(user);
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Buscar usuários com filtros, paginação e ordenação",
+               description = "Retorna uma lista de usuários com base nos filtros e parâmetros de paginação e ordenação.",
+               responses = {
+                   @ApiResponse(responseCode = "200", description = "Lista de usuários filtrados e paginados com sucesso"),
+                   @ApiResponse(responseCode = "400", description = "Erro nos parâmetros de busca")
+               })
+    public Page<User> search(
+            @RequestParam(value = "nome", required = false) String nome,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "sort", defaultValue = "nome,asc") String sort) {
+
+        
+        String[] sortParams = sort.split(",");
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Order.asc(sortParams[0])));
+
+        if (nome != null && email != null) {
+            return repository.findByNomeContainingAndEmailContaining(nome, email, pageable);
+        } else if (nome != null) {
+            return repository.findByNomeContaining(nome, pageable);
+        } else if (email != null) {
+            return repository.findByEmailContaining(email, pageable);
+        } else {
+            return repository.findAll(pageable);
+        }
     }
 }
