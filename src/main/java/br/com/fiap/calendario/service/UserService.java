@@ -3,11 +3,15 @@ package br.com.fiap.calendario.service;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import br.com.fiap.calendario.model.User;
@@ -16,7 +20,8 @@ import br.com.fiap.calendario.specification.UserSpecification;
 
 
 @Service
-public class UserService {
+@Primary
+public class UserService implements UserDetailsService {
 
     @Autowired
     private UserRepository repository;
@@ -62,7 +67,6 @@ public class UserService {
         return repository.save(user);
     }
 
-
     public Page<User> search(String nome, String email, int page, int size, String[] sort) {
         Specification<User> spec = Specification.where(
             UserSpecification.nomeContains(nome)
@@ -76,5 +80,12 @@ public class UserService {
 
         Pageable pageable = PageRequest.of(page, size, sorting);
         return repository.findAll(spec, pageable);
+    }
+
+    // Implementação necessária para autenticação com JWT
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        return repository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado com email: " + email));
     }
 }

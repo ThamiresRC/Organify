@@ -3,6 +3,7 @@ package br.com.fiap.calendario.config;
 import java.time.LocalDateTime;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import br.com.fiap.calendario.model.CalendarEvent;
@@ -13,6 +14,9 @@ import jakarta.annotation.PostConstruct;
 
 @Component
 public class DatabaseSeeder {
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     private UserRepository userRepository;
@@ -43,3 +47,6 @@ public class DatabaseSeeder {
         }
     }
 }
+
+
+
